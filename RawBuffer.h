@@ -48,6 +48,7 @@ public:
     // move assignment
     RawBuffer& operator=(RawBuffer&& other) noexcept {
         if (this != &other) {
+            ::operator delete(data_);
             sz_ = std::exchange(other.sz_, 0);
             data_ = std::exchange(other.data_, nullptr);
         }
