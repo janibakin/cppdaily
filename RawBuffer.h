@@ -4,54 +4,61 @@
 #include <cstddef>
 #include <cstring>
 #include <type_traits>
+#include <utility>
 #include <algorithm>
 
 class RawBuffer {
 public:
     // default constructor
-    RawBuffer() : size(0), data(nullptr) {}
+    RawBuffer() noexcept : sz_(0), data_(nullptr) {}
     // constructor
-    explicit RawBuffer(std::size_t bytes) : size(bytes) {
-        data = ::operator new(bytes);
-    }
+    explicit RawBuffer(const std::size_t bytes)
+        : sz_(bytes)
+        , data_(bytes ? ::operator new(bytes) : nullptr) {}
     // destructor
     ~RawBuffer() {
-        ::operator delete(data);
+        ::operator delete(data_);
     }
     // copy constructor
-    RawBuffer(const RawBuffer& other) {
-        size = other.size;
-        data = ::operator new(size);
-        std::memcpy(data, other.data, size);
+    RawBuffer(const RawBuffer& other)
+        : sz_(other.sz_)
+        , data_(other.sz_ ? ::operator new(other.sz_) : nullptr)
+    {
+        if (data_)
+            std::memcpy(data_, other.data_, sz_);
     }
     // copy assignment
     RawBuffer& operator=(const RawBuffer& other) {
-        if (this == &other) return *this;
-        size = other.size;
-        data = ::operator new(size);
-        std::memcpy(data, other.data, size);
+        if (this != &other) {
+            void* new_data = other.sz_ ? ::operator new(other.sz_) : nullptr;
+            if (new_data && other.data_) {
+                std::memcpy(new_data, other.data_, other.sz_);
+            }
+            ::operator delete(data_);
+            data_ = new_data;
+            sz_ = other.sz_;
+        }
         return *this;
     }
     // move constructor
-    RawBuffer(RawBuffer&& other) noexcept {
-        size = other.size;
-        data = other.data;
-        other.size = 0;
-        other.data = nullptr;
-    }
+    RawBuffer(RawBuffer&& other) noexcept
+        : sz_(std::exchange(other.sz_, 0))
+        , data_(std::exchange(other.data_, nullptr))
+    {}
     // move assignment
     RawBuffer& operator=(RawBuffer&& other) noexcept {
-        if (this == &other) return *this;
-        size = other.size;
-        data = other.data;
-        other.size = 0;
-        other.data = nullptr;
+        if (this != &other) {
+            sz_ = std::exchange(other.sz_, 0);
+            data_ = std::exchange(other.data_, nullptr);
+        }
         return *this;
     }
+    [[nodiscard]] std::size_t size() const noexcept { return sz_; }
+    [[nodiscard]] std::byte* data() const noexcept { return static_cast<std::byte*>(data_);}
 
 private:
-    std::size_t size;
-    void* data;
+    std::size_t sz_;
+    void* data_;
 };
 
 
